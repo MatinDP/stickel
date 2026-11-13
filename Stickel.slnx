@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Stickel.Core/Stickel.Core.csproj" />
+    <Project Path="src/Stickel.Desktop/Stickel.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Stickel.Integration/Stickel.Integration.csproj" />
+    <Project Path="tests/Stickel.ViewModel/Stickel.ViewModel.csproj" />
+  </Folder>
+</Solution>

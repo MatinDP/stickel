@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF><RuntimeIdentifier>win-x64</RuntimeIdentifier><PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>Stickel</AssemblyName><RootNamespace>Stickel.Desktop</RootNamespace>
+    <Version>1.0.0</Version><ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\stickel.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Stickel.Core\Stickel.Core.csproj" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="FlyleafLib" Version="3.11.18" />
+    <Content Include="..\..\runtime\**\*"><Link>runtime\%(RecursiveDir)%(Filename)%(Extension)</Link><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory><CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory></Content>
+  </ItemGroup>
+</Project>

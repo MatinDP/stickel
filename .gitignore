@@ -1,0 +1,9 @@
+.tools/
+runtime/
+**/bin/
+**/obj/
+dist/
+artifacts/
+.vs/
+*.user
+*.stickel
