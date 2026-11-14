@@ -1,4 +1,4 @@
-#define AppVersion "1.0.0"
+#define AppVersion "1.0.1"
 [Setup]
 AppId={{BB36D4ED-02FA-4A6C-AE40-02DD260A45A3}
 AppName=Stickel
@@ -25,7 +25,7 @@ SetupLogging=yes
 Name: "associate"; Description: "Open .stickel project files with Stickel"; Flags: unchecked
 Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
 [Files]
-Source: "..\dist\Stickel-1.0.0-win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\Stickel-1.0.1-win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 [Icons]
 Name: "{autoprograms}\Stickel"; Filename: "{app}\Stickel.exe"
 Name: "{autodesktop}\Stickel"; Filename: "{app}\Stickel.exe"; Tasks: desktopicon

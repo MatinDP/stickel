@@ -2,16 +2,16 @@
 
 ویرایشگر ویندوزی ساخت استیکر از تصویر و ویدیو، با رابط فارسی/انگلیسی و تم روشن/تیره.
 
-## دریافت نسخه ۱.۰.۰
+## دریافت نسخه ۱.۰.۱
 
-- [دانلود نصاب ویندوز x64](https://github.com/MatinDP/stickel/releases/download/v1.0.0/Stickel-Setup-1.0.0-x64.exe)
-- [دانلود نسخه قابل‌حمل ZIP](https://github.com/MatinDP/stickel/releases/download/v1.0.0/Stickel-1.0.0-win-x64.zip)
-- [یادداشت‌ها و هش فایل‌ها](https://github.com/MatinDP/stickel/releases/tag/v1.0.0)
+- [دانلود نصاب ویندوز x64](https://github.com/MatinDP/stickel/releases/download/v1.0.1/Stickel-Setup-1.0.1-x64.exe)
+- [دانلود نسخه قابل‌حمل ZIP](https://github.com/MatinDP/stickel/releases/download/v1.0.1/Stickel-1.0.1-win-x64.zip)
+- [یادداشت‌ها و هش فایل‌ها](https://github.com/MatinDP/stickel/releases/tag/v1.0.1)
 
 ## اجرا
 
 - نسخه قابل‌حمل: ZIP را کامل استخراج و `Stickel.exe` را اجرا کنید. پوشه `runtime` و DLLها باید کنار برنامه بمانند.
-- نصاب: `Stickel-Setup-1.0.0-x64.exe` برای حساب فعلی ویندوز نصب می‌کند. اتصال پسوند `.stickel` و میانبر دسکتاپ اختیاری‌اند.
+- نصاب: `Stickel-Setup-1.0.1-x64.exe` برای حساب فعلی ویندوز نصب می‌کند. اتصال پسوند `.stickel` و میانبر دسکتاپ اختیاری‌اند.
 - برنامه به نصب .NET یا codec pack نیاز ندارد. پردازش رسانه محلی است.
 - هدف: Windows 10/11 شصت‌وچهاربیتی و دستگاه دارای Direct3D 11. نسخه ویندوز فعلی میزبان بررسی شده؛ همه سخت‌افزارها و نسخه‌های ویندوز آزمایش نشده‌اند.
 

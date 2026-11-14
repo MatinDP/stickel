@@ -1,4 +1,4 @@
-# Stickel 1.0.0 — Validation report
+# Stickel 1.0.1 — Validation report
 
 Date: 2026-11-14. This report distinguishes executed checks from remaining coverage. Passing these cases does not prove compatibility with every media file or Windows machine.
 
@@ -16,6 +16,7 @@ Date: 2026-11-14. This report distinguishes executed checks from remaining cover
 | Area | Executed evidence |
 |---|---|
 | Video imports | AVI, MKV, MOV, WEBM and MP4 with actual decoded thumbnails and metadata |
+| Selected AVI playback regression | The supplied 7:18 Xvid/MP3 AVI plays directly in selected-clip preview; playback advanced beyond 10 seconds without preparing a full-length lossless proxy |
 | Still imports | PNG, JPG, BMP, TIFF, WEBP and SVG |
 | Animated images | Animated GIF, APNG and WebP correctly classified as motion; animated playback sources retained |
 | Static frame policy | Combined PNG follows playhead into the second clip; individual PNG follows the first trimmed frame |
@@ -49,6 +50,7 @@ The Windows app was inspected through Computer Use. Observed interactions includ
 - A visible green indicator at three seconds and red indicator above three seconds.
 - The actual over-duration export error before choosing an output folder or rendering.
 - Playing the rendered selected-clip preview and the complete three-clip image/video timeline to the end.
+- Playing the supplied long Xvid AVI in selected-clip mode while the displayed frame and playhead advanced to 10 seconds; the whole-timeline preview keeps its existing render-first behavior.
 
 The window tests found and led to fixes for startup XAML bindings, dark control contrast, timeline sizing, native video overlay hit testing, and export validation before the folder dialog. These were corrections found during testing, not features assumed to work from compilation alone.
 

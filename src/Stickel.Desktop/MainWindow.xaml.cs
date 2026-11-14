@@ -312,6 +312,35 @@ public partial class MainWindow : Window
         if (VM.Project.Clips.Count == 0 || VM.IsBusy) return;
         cropMode = false; var whole = VM.WholePreview; var start = whole ? 0 : VM.SelectedClip is { } c ? VM.StartOf(c) : 0;
         var duration = whole ? VM.TotalDuration : VM.SelectedClip?.Duration ?? 0;
+
+        if (!whole && VM.SelectedClip is { } selected)
+        {
+            var asset = VM.Project.Asset(selected);
+            var extension = Path.GetExtension(asset.SourcePath).ToLowerInvariant();
+            if (asset.Kind == MediaKind.Video && extension is not ".gif" and not ".webp")
+            {
+                var source = await VM.Tools.PrepareMotion(asset);
+                await mediaGate.WaitAsync();
+                try
+                {
+                    if (sourcePath != source || proxyActive)
+                    {
+                        var result = await Task.Run(() => player.Open(source));
+                        if (!result.Success) throw new IOException(result.Error);
+                        sourcePath = source; proxyActive = false;
+                    }
+                    var local = Math.Clamp(VM.Playhead - start, 0, Math.Max(0, duration - 1d / 30));
+                    player.SeekAccurate((int)((selected.InPoint + local) * 1000));
+                    ApplyGeometry();
+                    player.Audio.Mute = VM.Project.MuteOutput || VM.Project.TelegramMode;
+                    proxyStart = start - selected.InPoint;
+                    playing = true; clock.Start(); player.Play();
+                }
+                finally { mediaGate.Release(); }
+                return;
+            }
+        }
+
         var target = await VM.PreparePreview(whole); if (target is null) return;
         await mediaGate.WaitAsync();
         try

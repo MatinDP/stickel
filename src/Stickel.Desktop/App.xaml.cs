@@ -16,7 +16,7 @@ public partial class App : Application
             {
                 FFmpegPath = Path.Combine(AppContext.BaseDirectory, "runtime", "playback", "FFmpeg"),
                 FFmpegLogLevel = Flyleaf.FFmpeg.LogLevel.Error,
-                LogLevel = LogLevel.Error, LogOutput = Path.Combine(Path.GetTempPath(), "stickel-player.log"),
+                LogLevel = LogLevel.Error, LogOutput = Path.Combine(Path.GetTempPath(), $"stickel-player-{Environment.ProcessId}.log"),
                 PluginsPath = Path.Combine(AppContext.BaseDirectory, "no-plugins"), UIRefresh = true, UIRefreshInterval = 50
             });
             var window = new MainWindow(e.Args.FirstOrDefault(a => a.EndsWith(".stickel", StringComparison.OrdinalIgnoreCase)));
