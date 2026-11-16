@@ -1,13 +1,15 @@
-# Stickel 1.0.1 — Validation report
+# Stickel 1.1.0 — Validation report
 
-Date: 2026-11-14. This report distinguishes executed checks from remaining coverage. Passing these cases does not prove compatibility with every media file or Windows machine.
+Date: 2026-11-16. This report distinguishes executed checks from remaining coverage. Passing these cases does not prove compatibility with every media file or Windows machine.
 
 ## Build and automated checks
 
 - Release solution build: successful, zero warnings and zero errors.
-- Real media integration suite: **37 passing checks**. Latest recorded run: `artifacts/integration/20261114-025328/results.json`.
-- View-model integration suite: **23 passing checks**. Executed after the final view-model behavior changes.
-- Total: **60 automated checks passed**.
+- Real media integration suite: **40 passing checks**. Latest recorded run: `artifacts/integration/20261116-152954/results.json`.
+- View-model integration suite: **25 passing checks**. Executed after the final view-model behavior changes.
+- Theme checks: **64 passing checks**, covering dark/light and Persian/English controls, icons, scrolling and text contrast.
+- Real playback regression checks: **36 passing checks**, covering direct trimmed AVI and rendered timeline seeking, continued playback, seek-bar binding, paused seeking and Stop.
+- Total: **165 automated checks passed**.
 - Windows x64 self-contained publication and portable ZIP generated. The published application was launched and opened its bundled project without using the local SDK.
 - Inno Setup per-user installer compiled. Installation coverage is recorded separately below.
 
@@ -33,7 +35,7 @@ Date: 2026-11-14. This report distinguishes executed checks from remaining cover
 
 ## Editor-state checks
 
-The 23 view-model checks cover media separation, one-second default still duration, initial canvas ratio, grouping a drag as one Undo step, Redo, square crop, per-clip transforms, reordering and its Undo, following the displayed clip during whole-timeline preview, restricting selected-clip seeking to its own frames, global watermark transparency, Telegram audio/quality state, manual Free settings, duration validity, export preflight, language/theme state, save/open and undoing media removal.
+The 25 view-model checks cover media separation, one-second default still duration, initial canvas ratio, grouping a drag as one Undo step, Redo, square crop, per-clip transforms, reordering and its Undo, following the displayed clip during whole-timeline preview, restricting selected-clip seeking to its own frames, global watermark transparency, Telegram audio/quality state, manual Free settings, duration validity, export preflight, language/theme state, save/open and undoing media removal.
 
 ## Actual window inspection
 

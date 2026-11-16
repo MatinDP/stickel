@@ -3,7 +3,7 @@
     <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF><RuntimeIdentifier>win-x64</RuntimeIdentifier><PlatformTarget>x64</PlatformTarget>
     <AssemblyName>Stickel</AssemblyName><RootNamespace>Stickel.Desktop</RootNamespace>
-    <Version>1.0.1</Version><ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.1.0</Version><ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\stickel.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>

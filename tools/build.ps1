@@ -12,9 +12,13 @@ if ($Test) {
     $fixturePath = Get-ChildItem 'artifacts\integration' -Directory | Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'results.json') } | Sort-Object Name | Select-Object -Last 1 -ExpandProperty FullName
     & $sdkPath run --project 'tests\Stickel.ViewModel\Stickel.ViewModel.csproj' -c Release --no-build -- $fixturePath
     if ($LASTEXITCODE -ne 0) { throw 'View-model tests failed.' }
+    & $sdkPath run --project 'tests\Stickel.ViewModel\Stickel.ViewModel.csproj' -c Release --no-build -- --theme
+    if ($LASTEXITCODE -ne 0) { throw 'Theme checks failed.' }
+    & $sdkPath run --project 'tests\Stickel.ViewModel\Stickel.ViewModel.csproj' -c Release --no-build -- --playback
+    if ($LASTEXITCODE -ne 0) { throw 'Playback checks failed.' }
 }
 if ($Package -or $Installer) {
-    $publishPath = Join-Path $projectRoot 'dist\Stickel-1.0.1-win-x64'
+    $publishPath = Join-Path $projectRoot 'dist\Stickel-1.1.0-win-x64'
     & $sdkPath publish 'src\Stickel.Desktop\Stickel.Desktop.csproj' -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o $publishPath -v minimal
     if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }
     Copy-Item 'README.md','THIRD-PARTY-NOTICES.md' $publishPath
@@ -25,7 +29,7 @@ if ($Package -or $Installer) {
     if (Test-Path -LiteralPath 'licenses') { Copy-Item 'licenses\*' (Join-Path $publishPath 'licenses') -Force }
     $sample = Get-ChildItem 'artifacts\integration' -Filter 'Starter.stickel' -Recurse -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
     if ($sample) { New-Item -ItemType Directory -Force -Path (Join-Path $publishPath 'Samples') | Out-Null; Copy-Item -LiteralPath $sample.FullName -Destination (Join-Path $publishPath 'Samples\Starter.stickel') }
-    Compress-Archive -Path (Join-Path $publishPath '*') -DestinationPath 'dist\Stickel-1.0.1-win-x64.zip' -CompressionLevel Optimal -Force
+    Compress-Archive -Path (Join-Path $publishPath '*') -DestinationPath 'dist\Stickel-1.1.0-win-x64.zip' -CompressionLevel Optimal -Force
 }
 if ($Installer) {
     & '.\.tools\inno\tools\ISCC.exe' '/Qp' 'installer\Stickel.iss'
