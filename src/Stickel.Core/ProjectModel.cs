@@ -31,6 +31,7 @@ public sealed class TimelineClip
     public double OutPoint { get; set; }
     public LayoutMode Layout { get; set; } = LayoutMode.Fit;
     public double Zoom { get; set; } = 1;
+    public double Rotation { get; set; }
     public double OffsetX { get; set; }
     public double OffsetY { get; set; }
     public double CropX { get; set; }
@@ -95,7 +96,7 @@ public static class ProjectRules
                 throw new InvalidDataException("Each clip needs a valid duration of at least one frame.");
             if (asset.Kind == MediaKind.Video && clip.OutPoint > asset.Duration + 0.05)
                 throw new InvalidDataException("Trim point exceeds the original media duration.");
-            if (!double.IsFinite(clip.Zoom) || clip.Zoom < .1 || clip.Zoom > 8 ||
+            if (!double.IsFinite(clip.Zoom) || clip.Zoom < .1 || clip.Zoom > 8 || !double.IsFinite(clip.Rotation) || Math.Abs(clip.Rotation) > 360 ||
                 !double.IsFinite(clip.OffsetX) || !double.IsFinite(clip.OffsetY) || Math.Abs(clip.OffsetX) > 4 || Math.Abs(clip.OffsetY) > 4 ||
                 !double.IsFinite(clip.CropX) || !double.IsFinite(clip.CropY) || !double.IsFinite(clip.CropWidth) || !double.IsFinite(clip.CropHeight) ||
                 clip.CropX < 0 || clip.CropY < 0 || clip.CropWidth < .01 || clip.CropHeight < .01 || clip.CropX + clip.CropWidth > 1.00001 || clip.CropY + clip.CropHeight > 1.00001)

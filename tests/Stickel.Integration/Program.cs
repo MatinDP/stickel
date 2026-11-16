@@ -95,6 +95,16 @@ geometryProject.Clips[0].Layout = LayoutMode.Fit; geometryProject.Clips[0].Offse
 var movedResult = await exporter.Export(geometryProject, Path.Combine(run, "moved"));
 using (var image = new MagickImage(movedResult.Files[0])) Assert(image.GetPixels().GetPixel(100, 160).ToColor()!.A == 0 && image.GetPixels().GetPixel(400, 160).ToColor()!.B > 240, "Output-relative media positioning matches expected pixels");
 project.Format = ExportFormat.Mp4; project.MuteOutput = false; project.Background = "#FFFFFF"; project.Assets.Add(va); project.Clips = [new() { AssetId = va.Id, InPoint = .2, OutPoint = .7 }, new() { AssetId = ra.Id, OutPoint = .5 }];
+var rotated = geometryProject.Clone(); rotated.Width = rotated.Height = 512;
+rotated.Clips = [new() { AssetId = ra.Id, OutPoint = 1, Zoom = .5, Rotation = 90 }];
+var rotatedResult = await exporter.Export(rotated, Path.Combine(run, "rotated"));
+using (var image = new MagickImage(rotatedResult.Files[0])) Assert(image.GetPixels().GetPixel(256, 140).ToColor()!.R > 240 && image.GetPixels().GetPixel(140, 256).ToColor()!.A == 0, "90-degree rotation and scale preserve center and transparent background");
+rotated.Clips[0].Rotation = 45;
+var diagonalResult = await exporter.Export(rotated, Path.Combine(run, "diagonal"));
+using (var image = new MagickImage(diagonalResult.Files[0])) Assert(image.GetPixels().GetPixel(256, 256).ToColor()!.R > 240 && image.GetPixels().GetPixel(160, 180).ToColor()!.A > 200 && image.GetPixels().GetPixel(160, 330).ToColor()!.A == 0, "Arbitrary clockwise rotation renders the expected diagonal with alpha");
+var transformArchive = Path.Combine(run, "Transform.stickel"); await ProjectArchive.Save(rotated, transformArchive);
+var restoredTransform = await ProjectArchive.Load(transformArchive, Path.Combine(run, "restored-transform"));
+Assert(restoredTransform.Clips[0].Rotation == 45 && restoredTransform.Clips[0].Zoom == .5, "Project archive retains media rotation and size");
 var mp4 = await exporter.Export(project, Path.Combine(run, "mp4"));
 using (var meta = await Probe(mp4.Files[0])) { var streams = meta.RootElement.GetProperty("streams").EnumerateArray().ToArray(); Assert(streams.Any(s => s.GetProperty("codec_type").GetString() == "audio"), "MP4 retains audio and supplies silence for still clips"); Assert(Math.Abs(MediaTools.Number(meta.RootElement.GetProperty("format"), "duration") - 1) < .08, "Trimmed video and image concatenate to expected duration"); }
 project.MuteOutput = true;

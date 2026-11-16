@@ -57,6 +57,7 @@ public sealed class MainViewModel : ObservableObject
     public string Background { get => Project.Background; set { if (System.Text.RegularExpressions.Regex.IsMatch(value ?? "", "^#[0-9a-fA-F]{6}$")) Change(() => Project.Background = value!, "background"); } }
     public int LayoutIndex { get => (int)(SelectedClip?.Layout ?? LayoutMode.Fit); set { if (SelectedClip is { } c) Change(() => c.Layout = (LayoutMode)Math.Clamp(value, 0, 2)); } }
     public double Zoom { get => (SelectedClip?.Zoom ?? 1) * 100; set { if (SelectedClip is { } c) Change(() => c.Zoom = Math.Clamp(value / 100, .1, 8), "zoom"); } }
+    public double Rotation { get => SelectedClip?.Rotation ?? 0; set { if (SelectedClip is { } c && double.IsFinite(value)) Change(() => c.Rotation = Math.Round(((value % 360) + 540) % 360 - 180), "rotation"); } }
     public double CropX { get => (SelectedClip?.CropX ?? 0) * 100; set => SetCrop(value / 100, null, null, null); }
     public double CropY { get => (SelectedClip?.CropY ?? 0) * 100; set => SetCrop(null, value / 100, null, null); }
     public double CropWidth { get => (SelectedClip?.CropWidth ?? 1) * 100; set => SetCrop(null, null, value / 100, null); }
@@ -101,7 +102,7 @@ public sealed class MainViewModel : ObservableObject
         var current = ProjectRules.Locate(Project, Project.Playhead).Clip;
         if (current.Id == selectedId) return false;
         selectedId = current.Id;
-        foreach (var name in new[] { "SelectedClip", "SelectedAsset", "HasSelection", "SelectedName", "LayoutIndex", "Zoom", "CropX", "CropY", "CropWidth", "CropHeight" }) OnPropertyChanged(name);
+        foreach (var name in new[] { "SelectedClip", "SelectedAsset", "HasSelection", "SelectedName", "LayoutIndex", "Zoom", "Rotation", "CropX", "CropY", "CropWidth", "CropHeight" }) OnPropertyChanged(name);
         return true;
     }
     public void Change(Action action, string? key = null)
@@ -270,7 +271,7 @@ public sealed class MainViewModel : ObservableObject
     public void SetClock(double time) { Project.Playhead = Math.Clamp(time, 0, Project.Duration); OnPropertyChanged(nameof(Playhead)); OnPropertyChanged(nameof(TimeText)); }
     public void Refresh()
     {
-        foreach (var name in new[] { "Project", "SelectedClip", "SelectedAsset", "HasSelection", "SelectedName", "Title", "TotalDuration", "SeekMin", "SeekMax", "Playhead", "TimeText", "DurationText", "ValidDuration", "Estimate", "ManualQuality", "ManualAudio", "IsStatic", "FormatIndex", "ModeIndex", "MuteOutput", "Individual", "Quality", "CanvasWidth", "CanvasHeight", "Background", "LayoutIndex", "Zoom", "CropX", "CropY", "CropWidth", "CropHeight", "WatermarkEnabled", "Transparency", "WatermarkSize", "WatermarkName" }) OnPropertyChanged(name);
+        foreach (var name in new[] { "Project", "SelectedClip", "SelectedAsset", "HasSelection", "SelectedName", "Title", "TotalDuration", "SeekMin", "SeekMax", "Playhead", "TimeText", "DurationText", "ValidDuration", "Estimate", "ManualQuality", "ManualAudio", "IsStatic", "FormatIndex", "ModeIndex", "MuteOutput", "Individual", "Quality", "CanvasWidth", "CanvasHeight", "Background", "LayoutIndex", "Zoom", "Rotation", "CropX", "CropY", "CropWidth", "CropHeight", "WatermarkEnabled", "Transparency", "WatermarkSize", "WatermarkName" }) OnPropertyChanged(name);
         RefreshCommands(); Changed?.Invoke();
     }
     private void RefreshCommands() { UndoCommand.NotifyCanExecuteChanged(); RedoCommand.NotifyCanExecuteChanged(); }

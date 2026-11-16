@@ -14,6 +14,7 @@ using FlyleafLib;
 using FlyleafLib.MediaPlayer;
 using Microsoft.Win32;
 using Stickel.Core;
+using Stickel.Desktop.Controls;
 using Path = System.IO.Path;
 using KeyBinding = System.Windows.Input.KeyBinding;
 
@@ -28,12 +29,19 @@ public partial class MainWindow : Window
     private readonly SemaphoreSlim mediaGate = new(1, 1);
     private readonly string? initialProject;
     private bool ready, clockUpdate, playing, proxyActive, closingApproved, cropMode;
+    private bool startingPlayback, playbackToggleBusy;
+    private bool previewMuted;
+    private int lastAudiblePreviewVolume = 100;
     private double proxyStart;
+    private ListBox? mediaWheelOwner;
+    private int mediaWheelRemainder;
     private string sourcePath = "", watermarkPath = "";
     private int sourceVersion;
     private BitmapSource? sourceBitmap, watermarkBitmap;
     private Point dragStart;
     private double initialX, initialY;
+    private double initialZoom, initialRotation, transformDistance, transformAngle;
+    private Point transformCenter;
     private string? dragKind;
     private Rect watermarkBounds;
     private string? timelineDragId, timelineEdge;
@@ -49,6 +57,7 @@ public partial class MainWindow : Window
         config = new Config(); config.Player.AutoPlay = false; config.Player.SeekAccurate = true;
         config.Decoder.VideoThreads = Math.Min(Environment.ProcessorCount, 4);
         player = new Player(config);
+        player.Audio.Volume = 100;
         InitializeComponent(); DataContext = VM; VideoHost.Player = player;
         LanguagePicker.SelectedIndex = VM.Language == "fa" ? 0 : 1;
         VM.Changed += EditorChanged; VM.PositionChanged += PositionChanged;
@@ -58,13 +67,19 @@ public partial class MainWindow : Window
         Overlay.LostMouseCapture += (_, _) => { if (dragKind is not null) { dragKind = null; cropMode = false; CropRectangle.Visibility = Visibility.Collapsed; VM.EndGesture(); } };
         clock.Tick += Clock_Tick;
         PreviewKeyDown += Window_KeyDown;
-        ready = true; UpdateThemeButton(); EditorChanged();
+        SourceInitialized += (_, _) => WindowTheme.Apply(this, VM.LightTheme);
+        ready = true; UpdateThemeButton(); UpdatePlaybackButton(); ApplyPreviewAudioSettings(); EditorChanged();
     }
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
         if (initialProject is not null) await Guard(() => VM.Open(initialProject));
     }
-    private void UpdateThemeButton() => ThemeButton.Content = Localization.T(VM.LightTheme ? "Dark" : "Light");
+    private void UpdateThemeButton()
+    {
+        ThemeButton.Content = Localization.T(VM.LightTheme ? "Dark" : "Light");
+        IconAssist.SetKind(ThemeButton, VM.LightTheme ? "moon" : "sun");
+        WindowTheme.Apply(this, VM.LightTheme);
+    }
     private async Task Guard(Func<Task> action)
     {
         try { await action(); }
@@ -131,7 +146,7 @@ public partial class MainWindow : Window
         });
     }
     private void Cancel_Click(object sender, RoutedEventArgs e) => VM.Operation?.Cancel();
-    private void Language_Changed(object sender, SelectionChangedEventArgs e) { if (!ready) return; VM.SetLanguage(((ComboBoxItem)LanguagePicker.SelectedItem).Tag.ToString()!); UpdateThemeButton(); }
+    private void Language_Changed(object sender, SelectionChangedEventArgs e) { if (!ready) return; VM.SetLanguage(((ComboBoxItem)LanguagePicker.SelectedItem).Tag.ToString()!); UpdateThemeButton(); UpdatePlaybackButton(); }
     private void Theme_Click(object sender, RoutedEventArgs e) { VM.ToggleTheme(); UpdateThemeButton(); }
     private void Color_Click(object sender, RoutedEventArgs e) => VM.Background = ((Button)sender).Tag.ToString()!;
     private MediaAsset? CurrentLibraryAsset => (MediaTabs.SelectedIndex == 0 ? VideoList : ImageList).SelectedItem as MediaAsset;
@@ -168,7 +183,7 @@ public partial class MainWindow : Window
         VM.SetWatermarkPosition(w.CenterX + (direction == "left" ? -.01 : direction == "right" ? .01 : 0), w.CenterY + (direction == "up" ? -.01 : direction == "down" ? .01 : 0));
     }
     private void CropPreset_Click(object sender, RoutedEventArgs e) => VM.CropPreset(double.Parse(((Button)sender).Tag.ToString()!, CultureInfo.InvariantCulture));
-    private void ResetCrop_Click(object sender, RoutedEventArgs e) { cropMode = false; VM.CropPreset(0); VM.Zoom = 100; VM.SetPosition(0, 0); }
+    private void ResetCrop_Click(object sender, RoutedEventArgs e) { cropMode = false; VM.BeginGesture(); VM.CropPreset(0); VM.Zoom = 100; VM.Rotation = 0; VM.SetPosition(0, 0); VM.EndGesture(); }
     private void DrawCrop_Click(object sender, RoutedEventArgs e) { cropMode = !cropMode; VM.SetStatus(Localization.T(cropMode ? "FrameCropHint" : "Ready")); _ = ShowSource(); }
     private void PreviewMode_Changed(object sender, RoutedEventArgs e)
     {
@@ -187,6 +202,7 @@ public partial class MainWindow : Window
         TrimIn.Text = MediaTools.N(VM.SelectedClip?.InPoint ?? 0); TrimOut.Text = MediaTools.N(VM.SelectedClip?.OutPoint ?? 0);
         if (timelineDragId is null) DrawTimeline();
         ResizePreview();
+        if (dragKind is not null && !proxyActive) { ApplyGeometry(); return; }
         try { await ShowSource(); } catch (Exception ex) { App.Log(ex); VM.SetStatus(ex.Message); }
     }
     private async void PositionChanged()
@@ -197,11 +213,28 @@ public partial class MainWindow : Window
         try { await ShowSource(); } catch (Exception ex) { App.Log(ex); VM.SetStatus(ex.Message); }
     }
     private void Preview_SizeChanged(object sender, SizeChangedEventArgs e) { if (ready) { ResizePreview(); ApplyGeometry(); } }
+    private void MediaList_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is not ListBox list || FindScrollViewer(list) is not { } viewer) return;
+        if (!ReferenceEquals(mediaWheelOwner, list)) { mediaWheelOwner = list; mediaWheelRemainder = 0; }
+        mediaWheelRemainder += e.Delta;
+        while (mediaWheelRemainder >= 120) { viewer.LineUp(); mediaWheelRemainder -= 120; }
+        while (mediaWheelRemainder <= -120) { viewer.LineDown(); mediaWheelRemainder += 120; }
+        e.Handled = true;
+    }
+    private static ScrollViewer? FindScrollViewer(DependencyObject root)
+    {
+        if (root is ScrollViewer viewer) return viewer;
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            if (FindScrollViewer(VisualTreeHelper.GetChild(root, i)) is { } child) return child;
+        return null;
+    }
     private void ResizePreview()
     {
         double scale = Math.Min(Math.Max(1, PreviewSpace.ActualWidth - 4) / VM.Project.Width, Math.Max(1, PreviewSpace.ActualHeight - 4) / VM.Project.Height);
         double w = VM.Project.Width * scale, h = VM.Project.Height * scale;
         PreviewBorder.Width = w + 2; PreviewBorder.Height = h + 2; VideoHost.Width = w; VideoHost.Height = h; Overlay.Width = w; Overlay.Height = h;
+        TransformControls.Width = w; TransformControls.Height = h;
         EmptyPreview.Width = w; Canvas.SetTop(EmptyPreview, Math.Max(0, (h - 110) / 2)); Canvas.SetLeft(EmptyPreview, 0);
     }
     private (TimelineClip? Clip, double Local) CurrentClip()
@@ -212,6 +245,7 @@ public partial class MainWindow : Window
     }
     private async Task ShowSource()
     {
+        if (VM.Project.Clips.Count == 0) TransformControls.Children.Clear();
         if (playing || VM.Project.Clips.Count == 0) { if (VM.Project.Clips.Count == 0) { StillImage.Visibility = WatermarkImage.Visibility = Visibility.Collapsed; StillBackground.Visibility = Visibility.Visible; StillBackground.Fill = (Brush)FindResource("Bg"); StillBackground.Width = Overlay.Width; StillBackground.Height = Overlay.Height; player.Pause(); } return; }
         var (clip, local) = CurrentClip(); if (clip is null) return;
         var asset = VM.Project.Asset(clip); int version = ++sourceVersion;
@@ -229,16 +263,24 @@ public partial class MainWindow : Window
             }
             else
             {
-                StillBackground.Visibility = StillImage.Visibility = Visibility.Collapsed;
+                player.Pause();
                 var videoSource = await VM.Tools.PrepareMotion(asset);
-                if (sourcePath != videoSource || proxyActive)
+                var time = clip.InPoint + local;
+                var frame = Path.Combine(VM.Tools.CacheDirectory, $"edit-frame-{asset.Id}-{Math.Round(time * 1000)}.png");
+                if (!File.Exists(frame))
                 {
-                    var result = await Task.Run(() => player.Open(videoSource));
-                    if (!result.Success) throw new IOException(result.Error);
-                    sourcePath = videoSource; proxyActive = false;
+                    var temporary = frame + "." + Guid.NewGuid().ToString("N") + ".png";
+                    try
+                    {
+                        await VM.Tools.Run(VM.Tools.Ffmpeg, ["-y", "-hide_banner", "-loglevel", "error", "-ss", MediaTools.N(time), "-i", videoSource, "-frames:v", "1", "-compression_level", "1", temporary]);
+                        File.Move(temporary, frame, true);
+                    }
+                    finally { if (File.Exists(temporary)) File.Delete(temporary); }
                 }
                 if (version != sourceVersion) return;
-                player.SeekAccurate((int)((clip.InPoint + local) * 1000));
+                if (sourcePath != frame || sourceBitmap is null) sourceBitmap = LoadBitmap(frame);
+                sourcePath = frame; proxyActive = false;
+                StillBackground.Visibility = StillImage.Visibility = Visibility.Visible;
             }
             var wm = VM.Project.Watermark;
             if (wm.Enabled && wm.SourcePath.Length > 0 && watermarkPath != wm.SourcePath)
@@ -263,9 +305,11 @@ public partial class MainWindow : Window
         double fitScale = Math.Min((double)VM.Project.Width / g.CropWidth, (double)VM.Project.Height / g.CropHeight);
         config.Video.Zoom = effective.Layout == LayoutMode.Stretch ? effective.Zoom * 100 : g.Width / (g.CropWidth * fitScale) * 100;
         config.Video.PanXOffset = effective.OffsetX; config.Video.PanYOffset = effective.OffsetY;
+        config.Video.Rotation = 0;
         config.Video.BackColor = VM.Project.Format == ExportFormat.Mp4 ? (Color)ColorConverter.ConvertFromString(VM.Project.Background) : Color.FromRgb(28, 32, 39);
-        player.Audio.Mute = VM.Project.MuteOutput || VM.Project.TelegramMode;
-        if (asset.Kind == MediaKind.Image && sourceBitmap is not null)
+        // Preview monitoring is independent from export mute and Telegram output rules.
+        ApplyPreviewAudioSettings();
+        if (sourceBitmap is not null && StillImage.Visibility == Visibility.Visible)
         {
             var sx = Math.Clamp((int)Math.Round((double)g.CropX / asset.Width * sourceBitmap.PixelWidth), 0, sourceBitmap.PixelWidth - 1);
             var sy = Math.Clamp((int)Math.Round((double)g.CropY / asset.Height * sourceBitmap.PixelHeight), 0, sourceBitmap.PixelHeight - 1);
@@ -273,6 +317,7 @@ public partial class MainWindow : Window
             var sh = Math.Clamp((int)Math.Round((double)g.CropHeight / asset.Height * sourceBitmap.PixelHeight), 1, sourceBitmap.PixelHeight - sy);
             StillImage.Source = new CroppedBitmap(sourceBitmap, new Int32Rect(sx, sy, sw, sh));
             StillImage.Width = g.Width * s; StillImage.Height = g.Height * s; Canvas.SetLeft(StillImage, g.X * s); Canvas.SetTop(StillImage, g.Y * s);
+            StillImage.RenderTransform = new RotateTransform(effective.Rotation, StillImage.Width / 2, StillImage.Height / 2);
             StillBackground.Width = Overlay.Width; StillBackground.Height = Overlay.Height;
             StillBackground.Fill = VM.Project.Format == ExportFormat.Mp4 ? new SolidColorBrush((Color)ColorConverter.ConvertFromString(VM.Project.Background)) : CheckerBrush();
         }
@@ -285,6 +330,50 @@ public partial class MainWindow : Window
             watermarkBounds = new(w.CenterX * Overlay.Width - ww / 2, w.CenterY * Overlay.Height - wh / 2, ww, wh);
             Canvas.SetLeft(WatermarkImage, watermarkBounds.X); Canvas.SetTop(WatermarkImage, watermarkBounds.Y);
         }
+        DrawTransformControls(effective, g, s);
+    }
+    private void DrawTransformControls(TimelineClip clip, RenderGeometry geometry, double scale)
+    {
+        TransformControls.Children.Clear(); TransformControls.Visibility = Visibility.Visible;
+        if (cropMode || VM.IsBusy) return;
+        var center = new Point((geometry.X + geometry.Width / 2d) * scale, (geometry.Y + geometry.Height / 2d) * scale);
+        var angle = clip.Rotation * Math.PI / 180;
+        Point Rotate(double x, double y) => new(center.X + x * Math.Cos(angle) - y * Math.Sin(angle), center.Y + x * Math.Sin(angle) + y * Math.Cos(angle));
+        var w = geometry.Width * scale / 2; var h = geometry.Height * scale / 2;
+        var corners = new[] { Rotate(-w, -h), Rotate(w, -h), Rotate(w, h), Rotate(-w, h) };
+        var accent = (Brush)FindResource("Accent");
+        TransformControls.Children.Add(new Polygon { Points = new PointCollection(corners), Stroke = accent, StrokeThickness = 1.5, IsHitTestVisible = false });
+        void Handle(Point point, string kind, Cursor cursor)
+        {
+            // Keep handles reachable at the edge of the canvas.
+            point = new(Math.Clamp(point.X, 7, Math.Max(7, Overlay.Width - 7)), Math.Clamp(point.Y, 7, Math.Max(7, Overlay.Height - 7)));
+            var size = kind == "rotate" ? 22 : 14;
+            var handle = new System.Windows.Controls.Primitives.Thumb { Width = size, Height = size, Cursor = cursor, Tag = kind, Focusable = true, ToolTip = Localization.T(kind == "rotate" ? "RotateHint" : "ResizeHint") };
+            var border = new FrameworkElementFactory(typeof(Border));
+            border.SetValue(Border.BackgroundProperty, (Brush)FindResource("Panel")); border.SetValue(Border.BorderBrushProperty, accent); border.SetValue(Border.BorderThicknessProperty, new Thickness(2)); border.SetValue(Border.CornerRadiusProperty, new CornerRadius(kind == "rotate" ? 7 : 2));
+            if (kind == "rotate")
+            {
+                border.SetValue(Border.CornerRadiusProperty, new CornerRadius(11));
+                var icon = new FrameworkElementFactory(typeof(FaIcon)); icon.SetValue(FaIcon.KindProperty, "rotate"); icon.SetValue(WidthProperty, 11d); icon.SetValue(HeightProperty, 11d); icon.SetValue(Control.ForegroundProperty, accent); icon.SetValue(HorizontalAlignmentProperty, HorizontalAlignment.Center); border.AppendChild(icon);
+            }
+            handle.Template = new ControlTemplate(typeof(System.Windows.Controls.Primitives.Thumb)) { VisualTree = border };
+            AutomationProperties.SetName(handle, Localization.T(kind == "rotate" ? "Rotate" : "Resize"));
+            handle.PreviewMouseLeftButtonDown += Preview_MouseDown; handle.KeyDown += Transform_KeyDown;
+            Canvas.SetLeft(handle, point.X - size / 2); Canvas.SetTop(handle, point.Y - size / 2); TransformControls.Children.Add(handle);
+        }
+        for (int i = 0; i < 4; i++) { Handle(corners[i], "resize", i % 2 == 0 ? Cursors.SizeNWSE : Cursors.SizeNESW); var next = corners[(i + 1) % 4]; Handle(new((corners[i].X + next.X) / 2, (corners[i].Y + next.Y) / 2), "resize", i % 2 == 0 ? Cursors.SizeNS : Cursors.SizeWE); }
+        var top = Rotate(0, -h); var grip = Rotate(0, -h + 29);
+        TransformControls.Children.Add(new Line { X1 = top.X, Y1 = top.Y, X2 = grip.X, Y2 = grip.Y, Stroke = accent, StrokeThickness = 1.5, IsHitTestVisible = false });
+        Handle(grip, "rotate", Cursors.Hand);
+    }
+    private void Transform_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is not (Key.Left or Key.Right or Key.Up or Key.Down)) return;
+        var direction = e.Key is Key.Left or Key.Down ? -1 : 1;
+        if (((FrameworkElement)sender).Tag as string == "rotate") VM.Rotation += direction * (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? 15 : 1);
+        else VM.Zoom += direction * (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? 10 : 1);
+        TransformControls.Children.OfType<System.Windows.Controls.Primitives.Thumb>().FirstOrDefault(h => Equals(h.Tag, ((FrameworkElement)sender).Tag))?.Focus();
+        e.Handled = true;
     }
     private static Brush CheckerBrush()
     {
@@ -302,22 +391,43 @@ public partial class MainWindow : Window
     {
         var tag = ((Button)sender).Tag.ToString();
         if (tag == "center") { VM.SetPosition(0, 0); return; }
-        if (tag == "play") { if (playing) Pause(); else await Guard(Play); return; }
+        if (tag == "play") { await Guard(TogglePlayback); return; }
         Pause();
         var delta = tag == "prev" ? -1d / 30 : tag == "next" ? 1d / 30 : tag == "back" ? -1 : tag == "forward" ? 1 : 0;
         VM.Playhead = tag == "stop" ? VM.WholePreview ? 0 : VM.SelectedClip is { } c ? VM.StartOf(c) : 0 : VM.Playhead + delta;
+    }
+    private void UpdatePlaybackButton()
+    {
+        var pauseAction = playing || startingPlayback;
+        IconAssist.SetKind(PlayButton, pauseAction ? "pause" : "play");
+        var label = Localization.T(pauseAction ? "PauseAction" : "PlayAction");
+        PlayButton.ToolTip = label;
+        AutomationProperties.SetName(PlayButton, label);
+    }
+    private async Task TogglePlayback()
+    {
+        if (playbackToggleBusy || VM.IsBusy || VM.Project.Clips.Count == 0) return;
+        playbackToggleBusy = true;
+        try
+        {
+            if (playing) { Pause(); await ShowSource(); }
+            else { startingPlayback = true; UpdatePlaybackButton(); await Play(); }
+        }
+        catch { startingPlayback = false; Pause(); throw; }
+        finally { startingPlayback = false; playbackToggleBusy = false; UpdatePlaybackButton(); }
     }
     private async Task Play()
     {
         if (VM.Project.Clips.Count == 0 || VM.IsBusy) return;
         cropMode = false; var whole = VM.WholePreview; var start = whole ? 0 : VM.SelectedClip is { } c ? VM.StartOf(c) : 0;
+        TransformControls.Visibility = Visibility.Collapsed;
         var duration = whole ? VM.TotalDuration : VM.SelectedClip?.Duration ?? 0;
 
         if (!whole && VM.SelectedClip is { } selected)
         {
             var asset = VM.Project.Asset(selected);
             var extension = Path.GetExtension(asset.SourcePath).ToLowerInvariant();
-            if (asset.Kind == MediaKind.Video && extension is not ".gif" and not ".webp")
+            if (asset.Kind == MediaKind.Video && Math.Abs(selected.Rotation) < .001 && extension is not ".gif" and not ".webp")
             {
                 var source = await VM.Tools.PrepareMotion(asset);
                 await mediaGate.WaitAsync();
@@ -332,9 +442,11 @@ public partial class MainWindow : Window
                     var local = Math.Clamp(VM.Playhead - start, 0, Math.Max(0, duration - 1d / 30));
                     player.SeekAccurate((int)((selected.InPoint + local) * 1000));
                     ApplyGeometry();
-                    player.Audio.Mute = VM.Project.MuteOutput || VM.Project.TelegramMode;
+                    StillBackground.Visibility = StillImage.Visibility = Visibility.Collapsed;
+                    TransformControls.Visibility = Visibility.Collapsed;
+                    ApplyPreviewAudioSettings();
                     proxyStart = start - selected.InPoint;
-                    playing = true; clock.Start(); player.Play();
+                    playing = true; UpdatePlaybackButton(); clock.Start(); player.Play();
                 }
                 finally { mediaGate.Release(); }
                 return;
@@ -352,12 +464,43 @@ public partial class MainWindow : Window
             proxyStart = start; proxyActive = true;
             var local = Math.Clamp(VM.Playhead - start, 0, Math.Max(0, duration - .033));
             if (local >= duration - .05) local = 0;
-            player.SeekAccurate((int)(local * 1000)); player.Audio.Mute = VM.Project.MuteOutput || VM.Project.TelegramMode;
-            playing = true; clock.Start(); player.Play();
+            player.SeekAccurate((int)(local * 1000)); ApplyPreviewAudioSettings();
+            TransformControls.Visibility = Visibility.Collapsed;
+            playing = true; UpdatePlaybackButton(); clock.Start(); player.Play();
         }
         finally { mediaGate.Release(); }
     }
-    private void Pause() { playing = false; clock.Stop(); player.Pause(); }
+    private void Pause() { playing = false; UpdatePlaybackButton(); clock.Stop(); player.Pause(); }
+    private void PreviewVolume_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (!ready) return;
+        var volume = (int)Math.Round(PreviewVolumeSlider.Value);
+        if (volume > 0) lastAudiblePreviewVolume = volume;
+        ApplyPreviewAudioSettings();
+    }
+    private void PreviewMute_Click(object sender, RoutedEventArgs e)
+    {
+        if (previewMuted || PreviewVolumeSlider.Value <= 0)
+        {
+            previewMuted = false;
+            if (PreviewVolumeSlider.Value <= 0) PreviewVolumeSlider.Value = lastAudiblePreviewVolume;
+        }
+        else previewMuted = true;
+        ApplyPreviewAudioSettings();
+    }
+    private void ApplyPreviewAudioSettings()
+    {
+        var volume = (int)Math.Clamp(Math.Round(PreviewVolumeSlider.Value), 0, 100);
+        if (volume > 0) player.Audio.Volume = volume;
+        else player.Audio.Volume = 0;
+        player.Audio.Mute = previewMuted || volume == 0;
+        PreviewVolumeText.Text = $"{volume}%";
+        var muted = previewMuted || volume == 0;
+        IconAssist.SetKind(PreviewVolumeButton, muted ? "volume-xmark" : volume <= 35 ? "volume-low" : "volume-high");
+        var label = Localization.T(muted ? "UnmutePreview" : "MutePreview");
+        PreviewVolumeButton.ToolTip = label;
+        AutomationProperties.SetName(PreviewVolumeButton, label);
+    }
     private void Clock_Tick(object? sender, EventArgs e)
     {
         if (!playing) return;
@@ -373,11 +516,22 @@ public partial class MainWindow : Window
     }
     private void Preview_MouseDown(object sender, MouseButtonEventArgs e)
     {
+        if (e.Handled) return;
         if (VM.IsBusy || CurrentClip().Clip is null) return;
         Pause(); if (proxyActive) _ = ShowSource();
         Overlay.Focus();
         dragStart = e.GetPosition(Overlay); VM.BeginGesture();
-        if (cropMode) { dragKind = "crop"; CropRectangle.Visibility = Visibility.Visible; Canvas.SetLeft(CropRectangle, dragStart.X); Canvas.SetTop(CropRectangle, dragStart.Y); CropRectangle.Width = CropRectangle.Height = 0; }
+        var handleKind = (sender as FrameworkElement)?.Tag as string;
+        if (!cropMode && handleKind is "resize" or "rotate")
+        {
+            var clip = CurrentClip().Clip!; if (VM.SelectedClip?.Id != clip.Id) VM.Select(clip.Id, false);
+            var g = RenderGeometry.Calculate(VM.Project, clip); var scale = Overlay.Width / VM.Project.Width;
+            transformCenter = new((g.X + g.Width / 2d) * scale, (g.Y + g.Height / 2d) * scale);
+            initialZoom = clip.Zoom * 100; initialRotation = clip.Rotation;
+            var delta = dragStart - transformCenter; transformDistance = Math.Max(1, delta.Length); transformAngle = Math.Atan2(delta.Y, delta.X);
+            dragKind = handleKind;
+        }
+        else if (cropMode) { dragKind = "crop"; CropRectangle.Visibility = Visibility.Visible; Canvas.SetLeft(CropRectangle, dragStart.X); Canvas.SetTop(CropRectangle, dragStart.Y); CropRectangle.Width = CropRectangle.Height = 0; }
         else if (WatermarkImage.Visibility == Visibility.Visible && watermarkBounds.Contains(dragStart)) { dragKind = "watermark"; initialX = VM.Project.Watermark.CenterX; initialY = VM.Project.Watermark.CenterY; }
         else { dragKind = "media"; var clip = CurrentClip().Clip!; if (VM.SelectedClip?.Id != clip.Id) VM.Select(clip.Id, false); initialX = clip.OffsetX; initialY = clip.OffsetY; }
         Overlay.CaptureMouse(); e.Handled = true;
@@ -388,6 +542,12 @@ public partial class MainWindow : Window
         var p = e.GetPosition(Overlay); var dx = (p.X - dragStart.X) / Overlay.Width; var dy = (p.Y - dragStart.Y) / Overlay.Height;
         if (dragKind == "watermark") VM.SetWatermarkPosition(initialX + dx, initialY + dy);
         else if (dragKind == "media") VM.SetPosition(initialX + dx, initialY + dy);
+        else if (dragKind == "resize") VM.Zoom = initialZoom * (p - transformCenter).Length / transformDistance;
+        else if (dragKind == "rotate")
+        {
+            var delta = p - transformCenter; var angle = initialRotation + (Math.Atan2(delta.Y, delta.X) - transformAngle) * 180 / Math.PI;
+            VM.Rotation = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? Math.Round(angle / 15) * 15 : angle;
+        }
         else { Canvas.SetLeft(CropRectangle, Math.Min(p.X, dragStart.X)); Canvas.SetTop(CropRectangle, Math.Min(p.Y, dragStart.Y)); CropRectangle.Width = Math.Abs(p.X - dragStart.X); CropRectangle.Height = Math.Abs(p.Y - dragStart.Y); }
     }
     private void Preview_MouseUp(object sender, MouseButtonEventArgs e)
@@ -417,7 +577,7 @@ public partial class MainWindow : Window
         foreach (var clip in VM.Project.Clips)
         {
             var asset = VM.Project.Asset(clip); var width = Math.Max(3, clip.Duration * PixelsPerSecond - 3);
-            var card = new Border { Width = width, Height = 68, CornerRadius = new(5), Background = (Brush)FindResource("Raised"), BorderBrush = clip.Id == VM.SelectedClip?.Id ? accent : (Brush)FindResource("Line"), BorderThickness = new(clip.Id == VM.SelectedClip?.Id ? 2 : 1), Tag = clip.Id, ToolTip = $"{asset.Name}\n{clip.InPoint:0.###} → {clip.OutPoint:0.###} s", Focusable = true, Cursor = Cursors.Hand, ClipToBounds = true };
+            var card = new Border { Width = width, Height = 68, CornerRadius = new(9), Background = (Brush)FindResource("Raised"), BorderBrush = clip.Id == VM.SelectedClip?.Id ? accent : (Brush)FindResource("Line"), BorderThickness = new(clip.Id == VM.SelectedClip?.Id ? 2 : 1), Tag = clip.Id, ToolTip = $"{asset.Name}\n{clip.InPoint:0.###} → {clip.OutPoint:0.###} s", Focusable = true, Cursor = Cursors.Hand, ClipToBounds = true };
             AutomationProperties.SetName(card, "Clip " + asset.Name); AutomationProperties.SetAutomationId(card, "Clip-" + clip.Id);
             var grid = new Grid(); grid.ColumnDefinitions.Add(new() { Width = new GridLength(6) }); grid.ColumnDefinitions.Add(new()); grid.ColumnDefinitions.Add(new() { Width = new GridLength(6) });
             grid.Children.Add(new Border { Background = accent, Opacity = .55 }); var right = new Border { Background = accent, Opacity = .55 }; Grid.SetColumn(right, 2); grid.Children.Add(right);
@@ -476,7 +636,8 @@ public partial class MainWindow : Window
         if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.I) { e.Handled = true; Import_Click(this, new RoutedEventArgs()); }
         if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.N) { e.Handled = true; New_Click(this, new RoutedEventArgs()); }
         if (Keyboard.FocusedElement is TextBox) return;
-        if (e.Key == Key.Space) { e.Handled = true; if (playing) Pause(); else await Guard(Play); }
+        if (Keyboard.FocusedElement is System.Windows.Controls.Primitives.Thumb handle && handle.Tag is "rotate" or "resize") { Transform_KeyDown(handle, e); if (e.Handled) return; }
+        if (e.Key == Key.Space) { e.Handled = true; await Guard(TogglePlayback); }
         else if (e.Key == Key.Delete) { VM.RemoveClip(); e.Handled = true; }
         else if (e.Key is Key.Left or Key.Right) { Pause(); VM.Playhead += e.Key == Key.Left ? -1d / 30 : 1d / 30; e.Handled = true; }
     }
@@ -489,7 +650,7 @@ public partial class MainWindow : Window
         Pause(); ++sourceVersion; await mediaGate.WaitAsync();
         try { player.Dispose(); VideoHost.Dispose(); }
         finally { mediaGate.Release(); }
-        closingApproved = true; Close();
+        closingApproved = true; _ = Dispatcher.BeginInvoke(Close);
         try { if (Directory.Exists(VM.Tools.CacheDirectory)) Directory.Delete(VM.Tools.CacheDirectory, true); } catch (IOException) { }
     }
 }

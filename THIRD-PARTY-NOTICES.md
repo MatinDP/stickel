@@ -17,3 +17,5 @@ Stickel uses the following independently licensed components. Their licenses rem
 FFmpeg and Flyleaf are dynamically loaded or used as separate tools. Media engines are bundled; users are not expected to install system codec packs. No web, torrent, subtitle-download or YouTube plugins from the Flyleaf sample are packaged.
 
 Before publicly distributing binaries, preserve the exact component notices, corresponding source/build configuration and the applicable redistribution obligations. This local build includes the FFmpeg export license and upstream build README; source pointers above identify the corresponding projects.
+
+Font Awesome Pro 7.3.1: selected Classic Solid SVG icons supplied locally by the project owner. Copyright 2026 Fonticons, Inc.; commercial license. Original license is included at Assets/FontAwesome/LICENSE.txt. Only the selected icon paths are bundled; the complete font package is not included.

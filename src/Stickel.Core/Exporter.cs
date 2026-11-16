@@ -101,7 +101,9 @@ public sealed class Exporter(MediaTools tools)
         var audioIndex = hasWatermark ? 3 : 2;
         args.AddRange(["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"]);
         var g = RenderGeometry.Calculate(project, clip);
-        var filter = $"[0:v]setpts=PTS-STARTPTS,crop={g.CropWidth}:{g.CropHeight}:{g.CropX}:{g.CropY},scale={g.Width}:{g.Height}:flags=lanczos,setsar=1,fps=30,format=rgba[fg];[1:v][fg]overlay=x={MediaTools.N(g.X)}:y={MediaTools.N(g.Y)}:format=auto:shortest=1[base]";
+        var angle = MediaTools.N(clip.Rotation * Math.PI / 180);
+        var rotation = Math.Abs(clip.Rotation) < .001 ? "" : $",rotate={angle}:ow=ceil(rotw({angle})):oh=ceil(roth({angle})):c=none";
+        var filter = $"[0:v]setpts=PTS-STARTPTS,crop={g.CropWidth}:{g.CropHeight}:{g.CropX}:{g.CropY},scale={g.Width}:{g.Height}:flags=lanczos,setsar=1,fps=30,format=rgba{rotation}[fg];[1:v][fg]overlay=x={MediaTools.N(g.X + g.Width / 2d)}-overlay_w/2:y={MediaTools.N(g.Y + g.Height / 2d)}-overlay_h/2:format=auto:shortest=1[base]";
         var final = "base";
         if (hasWatermark)
         {

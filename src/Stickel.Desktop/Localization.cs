@@ -1,5 +1,4 @@
 using System.Windows;
-using System.Windows.Media;
 
 namespace Stickel.Desktop;
 
@@ -8,10 +7,16 @@ public static class Localization
     public static string Language { get; private set; } = "fa";
     private static readonly Dictionary<string, (string En, string Fa)> Words = new()
     {
-        ["New"] = ("New", "جدید"), ["Open"] = ("Open project", "بازکردن پروژه"), ["Save"] = ("Save .stickel", "ذخیره .stickel"),
+        ["New"] = ("New", "جدید"), ["Open"] = ("Open", "بازکردن"), ["Save"] = ("Save", "ذخیره"),
         ["Import"] = ("Import media", "افزودن رسانه"), ["Export"] = ("Export", "خروجی گرفتن"), ["Settings"] = ("SETTINGS", "تنظیمات"),
         ["Preview"] = ("PREVIEW", "پیش‌نمایش"), ["Media"] = ("MEDIA LIBRARY", "پلی‌لیست"), ["Timeline"] = ("TIMELINE", "تایم‌لاین"),
         ["Undo"] = ("Undo", "واگرد"), ["Redo"] = ("Redo", "ازنو"), ["Dark"] = ("Dark", "تیره"), ["Light"] = ("Light", "روشن"),
+        ["Resize"] = ("Resize media", "تغییر اندازهٔ مدیا"), ["Rotate"] = ("Rotate media", "چرخش مدیا"),
+        ["Up"] = ("Move up", "انتقال به بالا"), ["Down"] = ("Move down", "انتقال به پایین"),
+        ["BackSecond"] = ("Back one second", "یک ثانیه عقب"), ["ForwardSecond"] = ("Forward one second", "یک ثانیه جلو"),
+        ["PlayAction"] = ("Play · Space", "پخش · Space"), ["PauseAction"] = ("Pause · Space", "مکث · Space"),
+        ["ResizeHint"] = ("Drag to resize · keeps aspect ratio", "برای تغییر اندازه بکشید؛ نسبت تصویر حفظ می‌شود"),
+        ["RotateHint"] = ("Drag to rotate · Shift: 15° steps", "برای چرخش بکشید؛ با Shift گام‌های ۱۵ درجه"),
         ["Output"] = ("Output", "خروجی"), ["Format"] = ("Format", "فرمت"), ["Telegram"] = ("Telegram sticker", "استیکر تلگرام"),
         ["Free"] = ("Free export", "خروجی آزاد"), ["Quality"] = ("Quality", "کیفیت"), ["AutoQuality"] = ("Auto · best quality under 256 KB", "خودکار · بهترین کیفیت زیر ۲۵۶ کیلوبایت"),
         ["Parts"] = ("Also export each clip separately", "خروجی جداگانه‌ی هر بخش هم ساخته شود"), ["Mute"] = ("Silent output", "خروجی بی‌صدا"),
@@ -43,7 +48,8 @@ public static class Localization
         ["StaticHint"] = ("Timeline: current frame · parts: first trimmed frame", "تایم‌لاین: فریم فعلی · هر بخش: اولین فریم پس از تریم"),
         ["NoSelection"] = ("Select a clip to edit", "یک بخش را برای ویرایش انتخاب کن"), ["FrameCropHint"] = ("Drag a rectangle to crop the source", "برای کراپ، روی تصویر یک مستطیل بکش"),
         ["SaveAs"] = ("Save project as…", "ذخیره پروژه با نام…"), ["ShowFolder"] = ("Open output folder", "بازکردن پوشه خروجی"),
-        ["AudioMonitor"] = ("Preview audio", "صدای پیش‌نمایش"), ["Lossless"] = ("PNG is lossless", "PNG بدون افت کیفیت است"),
+        ["AudioMonitor"] = ("Preview volume", "بلندی صدای پیش‌نمایش"), ["MutePreview"] = ("Mute preview", "بی‌صدا کردن پیش‌نمایش"),
+        ["UnmutePreview"] = ("Unmute preview", "فعال کردن صدای پیش‌نمایش"), ["Lossless"] = ("PNG is lossless", "PNG بدون افت کیفیت است"),
         ["BestImageQuality"] = ("Auto · maximum image quality", "خودکار · بیشترین کیفیت تصویر"),
         ["Busy"] = ("Please finish or cancel the current operation.", "ابتدا عملیات فعلی را تمام یا لغو کن."),
         ["SourceLimit"] = ("Trim points exceed the source duration.", "نقاط تریم خارج از مدت فایل اصلی‌اند."),
@@ -56,8 +62,6 @@ public static class Localization
     {
         Language = language;
         foreach (var key in Words.Keys) Application.Current.Resources[key] = T(key);
-        var colors = light ? new[] { "#EDF1F6", "#FFFFFF", "#E3E9F1", "#BCC8D7", "#152333", "#4C5D72", "#087B62", "#FFFFFF" } : new[] { "#101318", "#1A1F27", "#252C36", "#394351", "#F0F3F8", "#ACB8C9", "#50D6B4", "#08271F" };
-        var keys = new[] { "Bg", "Panel", "Raised", "Line", "Text", "Muted", "Accent", "AccentInk" };
-        for (var i = 0; i < keys.Length; i++) Application.Current.Resources[keys[i]] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(colors[i]));
+        ThemePalette.Apply(light);
     }
 }

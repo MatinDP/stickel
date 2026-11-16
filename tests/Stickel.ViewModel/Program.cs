@@ -16,6 +16,10 @@ public static class Program
         {
             try
             {
+                if (args.Contains("--theme"))
+                {
+                    ThemeChecks.Run(); app.Shutdown(0); return;
+                }
                 var fixture = Path.GetFullPath(args.FirstOrDefault() ?? "artifacts/integration/20261114-022052");
                 var vm = new MainViewModel();
                 await vm.Import([Path.Combine(fixture, "قرمز اصلی.png"), Path.Combine(fixture, "blue.png"), Path.Combine(fixture, "movie with sound.mp4")]);
@@ -25,6 +29,10 @@ public static class Program
                 vm.BeginGesture(); vm.SetPosition(.1, .2); vm.SetPosition(.2, .3); vm.EndGesture();
                 vm.UndoCommand.Execute(null); Check(vm.SelectedClip!.OffsetX == 0, "One undo reverses a complete mouse gesture");
                 vm.RedoCommand.Execute(null); Check(vm.SelectedClip!.OffsetX == .2, "Redo restores a mouse gesture");
+                vm.BeginGesture(); vm.Rotation = 15; vm.Rotation = 45; vm.Zoom = 75; vm.EndGesture();
+                vm.UndoCommand.Execute(null); Check(vm.Rotation == 0 && vm.Zoom == 100, "One undo restores rotation and scale for a transform gesture");
+                vm.RedoCommand.Execute(null); Check(vm.Rotation == 45 && vm.Zoom == 75, "Redo restores rotation and scale together");
+                vm.Rotation = 0; vm.Zoom = 100;
                 vm.CropPreset(1); Check(Math.Abs(vm.SelectedClip!.CropWidth - .625) < .001, "Square crop preserves source geometry");
                 vm.AddClip(vm.Images[1]); var secondId = vm.SelectedClip!.Id; vm.LayoutIndex = 1;
                 Check(vm.Project.Clips[0].Layout == Stickel.Core.LayoutMode.Fit && vm.SelectedClip.Layout == Stickel.Core.LayoutMode.Fill, "Layout settings remain independent per clip");

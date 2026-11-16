@@ -7,6 +7,8 @@
     <ApplicationIcon>Assets\stickel.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Assets\FontAwesome\icons.json" />
+    <Content Include="Assets\FontAwesome\LICENSE.txt"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory><CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory></Content>
     <ProjectReference Include="..\Stickel.Core\Stickel.Core.csproj" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="FlyleafLib" Version="3.11.18" />
