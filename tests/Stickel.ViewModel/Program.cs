@@ -20,6 +20,10 @@ public static class Program
                 {
                     ThemeChecks.Run(); app.Shutdown(0); return;
                 }
+                if (args.Contains("--playback"))
+                {
+                    await PlaybackChecks.Run(); app.Shutdown(0); return;
+                }
                 var fixture = Path.GetFullPath(args.FirstOrDefault() ?? "artifacts/integration/20261114-022052");
                 var vm = new MainViewModel();
                 await vm.Import([Path.Combine(fixture, "قرمز اصلی.png"), Path.Combine(fixture, "blue.png"), Path.Combine(fixture, "movie with sound.mp4")]);

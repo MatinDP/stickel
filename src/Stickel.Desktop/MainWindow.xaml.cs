@@ -28,7 +28,7 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer clock = new() { Interval = TimeSpan.FromMilliseconds(33) };
     private readonly SemaphoreSlim mediaGate = new(1, 1);
     private readonly string? initialProject;
-    private bool ready, clockUpdate, playing, proxyActive, closingApproved, cropMode;
+    private bool ready, playing, proxyActive, closingApproved, cropMode;
     private bool startingPlayback, playbackToggleBusy;
     private bool previewMuted;
     private int lastAudiblePreviewVolume = 100;
@@ -207,7 +207,14 @@ public partial class MainWindow : Window
     }
     private async void PositionChanged()
     {
-        if (!ready || playing) return;
+        if (!ready) return;
+        if (playing)
+        {
+            // proxyStart maps timeline time to either the trimmed source or rendered preview.
+            player.SeekAccurate((int)Math.Round(Math.Max(0, VM.Playhead - proxyStart) * 1000));
+            UpdatePlayhead();
+            return;
+        }
         if (VM.FollowPreviewSelection()) { DrawTimeline(); TrimIn.Text = MediaTools.N(VM.SelectedClip?.InPoint ?? 0); TrimOut.Text = MediaTools.N(VM.SelectedClip?.OutPoint ?? 0); }
         UpdatePlayhead();
         try { await ShowSource(); } catch (Exception ex) { App.Log(ex); VM.SetStatus(ex.Message); }
@@ -392,7 +399,7 @@ public partial class MainWindow : Window
         var tag = ((Button)sender).Tag.ToString();
         if (tag == "center") { VM.SetPosition(0, 0); return; }
         if (tag == "play") { await Guard(TogglePlayback); return; }
-        Pause();
+        if (tag == "stop") Pause();
         var delta = tag == "prev" ? -1d / 30 : tag == "next" ? 1d / 30 : tag == "back" ? -1 : tag == "forward" ? 1 : 0;
         VM.Playhead = tag == "stop" ? VM.WholePreview ? 0 : VM.SelectedClip is { } c ? VM.StartOf(c) : 0 : VM.Playhead + delta;
     }
@@ -504,15 +511,10 @@ public partial class MainWindow : Window
     private void Clock_Tick(object? sender, EventArgs e)
     {
         if (!playing) return;
-        clockUpdate = true; VM.SetClock(proxyStart + (double)player.CurTime / TimeSpan.TicksPerSecond); UpdatePlayhead(); clockUpdate = false;
+        VM.SetClock(proxyStart + (double)player.CurTime / TimeSpan.TicksPerSecond); UpdatePlayhead();
         if (VM.FollowPreviewSelection()) { DrawTimeline(); TrimIn.Text = MediaTools.N(VM.SelectedClip?.InPoint ?? 0); TrimOut.Text = MediaTools.N(VM.SelectedClip?.OutPoint ?? 0); }
         var end = VM.WholePreview ? VM.TotalDuration : VM.SelectedClip is { } c ? VM.StartOf(c) + c.Duration : VM.TotalDuration;
         if (VM.Playhead >= end - .04 || player.Status == Status.Ended) { Pause(); VM.Playhead = Math.Max(proxyStart, end - 1d / 30); }
-    }
-    private void Seek_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        if (!ready || clockUpdate) return;
-        if (playing && proxyActive) player.SeekAccurate((int)(Math.Max(0, e.NewValue - proxyStart) * 1000));
     }
     private void Preview_MouseDown(object sender, MouseButtonEventArgs e)
     {
@@ -593,7 +595,7 @@ public partial class MainWindow : Window
         playheadLine = new Line { Stroke = accent, StrokeThickness = 2, Y1 = 19, Y2 = 102, IsHitTestVisible = false }; TimelineCanvas.Children.Add(playheadLine); UpdatePlayhead();
     }
     private void UpdatePlayhead() { if (playheadLine is not null) playheadLine.X1 = playheadLine.X2 = VM.Playhead * PixelsPerSecond; }
-    private void Timeline_MouseDown(object sender, MouseButtonEventArgs e) { if (!VM.IsBusy) { Pause(); VM.Playhead = e.GetPosition(TimelineCanvas).X / PixelsPerSecond; } }
+    private void Timeline_MouseDown(object sender, MouseButtonEventArgs e) { if (!VM.IsBusy) VM.Playhead = e.GetPosition(TimelineCanvas).X / PixelsPerSecond; }
     private void Clip_MouseDown(object sender, MouseButtonEventArgs e)
     {
         if (VM.IsBusy) return; var card = (Border)sender; var id = (string)card.Tag; var p = e.GetPosition(card);
@@ -639,7 +641,7 @@ public partial class MainWindow : Window
         if (Keyboard.FocusedElement is System.Windows.Controls.Primitives.Thumb handle && handle.Tag is "rotate" or "resize") { Transform_KeyDown(handle, e); if (e.Handled) return; }
         if (e.Key == Key.Space) { e.Handled = true; await Guard(TogglePlayback); }
         else if (e.Key == Key.Delete) { VM.RemoveClip(); e.Handled = true; }
-        else if (e.Key is Key.Left or Key.Right) { Pause(); VM.Playhead += e.Key == Key.Left ? -1d / 30 : 1d / 30; e.Handled = true; }
+        else if (e.Key is Key.Left or Key.Right) { VM.Playhead += e.Key == Key.Left ? -1d / 30 : 1d / 30; e.Handled = true; }
     }
     private async void Window_Closing(object? sender, CancelEventArgs e)
     {
